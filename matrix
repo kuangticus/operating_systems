@@ -1,0 +1,343 @@
+#!/bin/bash
+#****************************************************************************************************
+# ** Author: WeiHao Kuang
+# ** Email: kuangw@oregonstate.edu
+# ** Description: This script is a matrix calculator and will perfrom simple mmatrix operations
+#    dims, transpose, mean, addition, and multiplication 
+#****************************************************************************************************
+
+# References used:
+# Canvas Assignment 1 Hints Section
+# https://ss64.com/bash/wc.html
+# https://www.cyberciti.biz/faq/bash-for-loop/
+# https://ss64.com/bash/paste.html
+# https://stackoverflow.com/questions/2439579/how-to-get-the-first-line-of-a-file-in-a-bash-script
+# https://www.cyberciti.biz/faq/unix-for-loop-1-to-10/
+# https://unix.stackexchange.com/questions/26601/how-to-read-from-two-input-files-using-while-loop
+
+# this the trap that will remove files that are temp and are not useful after the program runs
+# also this is used to delete the temp files in case there are program interupts, hangs, crashes etc.
+trap "rm -f datafile* d2utmp* mtest* add* mdank* dank*;" QUIT KILL HUP INT TERM EXIT
+
+# NAME:
+# 	dims - gets the dimension for a matrix that is passed in
+# SYNOPSIS:
+#	dims matrix
+# DESCRIPTION:
+#	Prints "ROWS COLS" (Space separated!)
+
+function dims () {
+
+    datafilepath="datafile$$"   #variable holding tempfile path
+
+    #handles input from stdin when there is no args with dims
+    if [ $# = 0 ] 
+    then
+        if [ ! -t 0 ]   # if stdin not empty
+        then 
+            cat > "$datafilepath"
+
+        else    #if stdin is empty
+            printf "%s\n" "Incorrect # or args" 1>&2
+            exit 1
+        fi
+    elif [ "$#" = 1 ]   #if there is 1 arg entered with dims
+    then 
+        datafilepath=$1     #datafilepath will get first argument
+    fi
+
+    #if argument count greater than 1, then error to stderr
+    if [ $# -gt 1 ] 
+    then 
+        echo  "Error only one statement can be used!" 1>&2
+        exit 1
+
+    #if argument file is not readable error statment to stderr
+    elif [ ! -r $1 ]
+    then 
+        echo "Not readable file!" 1>&2
+        exit 1
+    fi
+    
+    #row counting using cat and wc command on argument file passed in
+    rows=$(cat $datafilepath | wc -l) 
+
+
+    # uses the head command and row specifer to get
+    # the columns of the in the line
+    cols=$( head -n 1 $datafilepath | wc -w)
+    echo -e "$rows $cols"
+}
+
+# NAME:
+# 	transpose - transposes the matrix that is passed in
+# SYNOPSIS:
+#	transpose matrix
+# DESCRIPTION:
+#	Prints the transpose of the input, in a valid matrix format
+
+function transpose () {
+
+    if [ $# = 0 ] 
+    then
+        if [ ! -t 0 ]   # if stdin not empty
+        then 
+            cat > "$datafilepath"
+
+        else    #if stdin is empty
+            printf "%s\n" "Incorrect # or args" 1>&2
+            exit 1
+        fi
+    elif [ "$#" = 1 ]   #if there is 1 arg entered with dims
+    then 
+        datafilepath=$1     #datafilepath will get first argument
+    fi
+    
+    #checks to see if the arg count is > 1
+    #if true then exit 1 with error statment to stderr
+    if [ $# -gt 1 ] 
+    then 
+        echo "Incorrect arguments!" 1>&2
+        exit 1
+    
+    #checks to see of the file passed in is readable
+    #if not then exit 1 status, and error message to stderr
+    elif [ ! -r $1 ]
+    then 
+        echo "File not readable!" 1>&2
+        exit 1
+
+    #runs the transpose on the passed in file
+    else
+        #gets the cols for passed in matrix
+        cols=$( head -n 1 $datafilepath | wc -w)
+        
+        #for loop running cols amount of times
+        for ((i=1;i<=$cols;i++)); 
+        do 
+            #cut is used to get the column
+            #paste -s is used to get the column into a row
+            cut -f$i $datafilepath | paste -s
+        done
+    fi
+}
+
+# NAME:
+# 	mean - find the mean value of the matrix file passed in
+# SYNOPSIS:
+#	mean matrix
+# DESCRIPTION:
+#	Prints a row vector mean of the input matrix, matrix  
+#   format with ***.5 values rounded away from zero
+
+function mean () {
+    if [ $# = 0 ] 
+    then
+        if [ ! -t 0 ]   # if stdin not empty
+        then 
+            cat > "$datafilepath"
+
+        else    #if stdin is empty
+            printf "%s\n" "Incorrect # or args" 1>&2
+            exit 1
+        fi
+    elif [ "$#" = 1 ]   #if there is 1 arg entered with dims
+    then 
+        datafilepath=$1     #datafilepath will get first argument
+    fi
+
+    mtest="mtest$$" #process id in name for tempfile var
+
+    if [ ! -r $datafilepath ] #if file is not readable
+    then
+        echo "File not readable!" 1>&2
+        exit 1
+    elif [ $# -gt 1 ] #if the argument count is > 1
+    then
+        echo "Incorrect arguments!" 1>&2
+        exit 1
+    else
+        rows=$(cat $datafilepath | wc -l) #rows of the matrix
+        cols=$(head -n 1 $datafilepath | wc -w) #cols of the matrix
+        
+        # for loop iterates the amount of cols in matrix
+        for ((i=1;i<=$cols;i++))
+        do
+            cut -f$i $datafilepath > $mtest # cutted col goes to tempfile
+            sum=0
+
+            #while loop is used to read the tempfile line by line
+            while read line
+            do
+                sum=$(( $line+$sum )) # gets the sum of the column
+                
+                # this will get the average of the column
+                average=$(( ($sum + ($rows/2)*( ($sum>0)*2-1 )) / $rows ))    
+            done < $mtest
+
+            if [ $i -eq $cols ] # this will print the last cols with newline chars
+            then
+                printf "%s\n" $average
+            else # otherwise that number that is printed will be tab delimited
+                printf "%s\t" $average
+            fi
+        done
+    fi 
+}
+
+# NAME:
+# 	add - finds the added matrix from 2 input matrices
+# SYNOPSIS:
+#	mean matrix1 matrix2
+# DESCRIPTION:
+#	prints the sum, in a valid matrix format to stdout
+
+function add () {
+
+    #tempfiles with process ids in their names
+    add_file1="add_file1$$"
+    add_file2="add_file2$$"
+    mtest1="mtest1$$"
+
+    if [ $# -ne 2 ] # if the arg count ne 2
+    then
+        printf "%s\n" "Incorrect arguments!" 1>&2
+        exit 1
+    elif [ ! -r $1 ] || [ ! -r $2 ] # if the either file is not readable
+    then
+        printf "%s\n" "File/s not readable!" 1>&2
+        exit 1
+    else
+        #obtaining the row and col infomation of the matrices m1 and m2
+        rows1=$(cat $1 | wc -l) # cat to get rows1
+        rows2=$(cat $2 | wc -l) # cat to get rows2
+        cols1=$(head -n 1 $1 | wc -w) # using word count to get cols1
+        cols2=$(head -n 1 $2 | wc -w) # using word count to get cols1
+
+        # conditional to check the adding dimensions
+        if [ $rows1 != $rows2 ] || [ $cols1 != $cols2 ]
+        then
+            printf "%s\n" "Matrix dimensions don't match!" 1>&2
+        exit 1
+        else
+            # for loop runs cols1 times
+            for ((i=1;i<=$cols1;i++))
+            do
+                # cutting the cols from m1 and m2
+                # iterated by the for loop cols times
+                cut -f$i $1 > $add_file1
+                cut -f$i $2 > $add_file2
+
+                counter=1
+                # simultaneously reading bother add1 and add2
+                while read theline1 <&3; read theline2  <&4;
+                do
+                    #adding the two number together from the column files
+                    addition=$(( $theline1+$theline2 ))
+
+                    #conditions are used to place the sums inside of a tempfile
+                    if [ $counter = $rows1 ] #when the counter and rows are the same
+                    then  
+                        printf "%d%s\n" $addition >> $mtest1 # append to the tempfile
+                    else
+                        printf "%d%s\t" $addition >> $mtest1 # append to the tempfile
+                    fi
+                    ((counter++))
+                done 3<$add_file1 4<$add_file2 # reading from tempfiles add_file1 and 2
+            done
+
+        # condionals below are used to determine the loop iterations
+        # in the for loop in line 215
+        iter=0
+        if [ $cols1 -ne $rows1 ] 
+        then
+            iter=$rows1 # titeration variable
+        else 
+            iter=$cols1 # iteration variable
+        fi
+
+        # this for loop is used to display the summation matrix from the tempfiles
+        for ((i=1;i<=$iter;i++)); 
+        do 
+            cut -f$i $mtest1 | paste -s # cut and paste to get to right format
+        done
+        fi 
+    fi 
+}
+
+# NAME:
+# 	multiply - finds the product matrix from 2 input matrices
+# SYNOPSIS:
+#	multiply matrix1 matrix2
+# DESCRIPTION:
+#	Prints a product matrix that is correct to the stdout
+
+function multiply () {
+
+    # tempfile with their process ids in the naming
+    mdank="mdank$$"
+    dankfile="dankfile$$"
+    dankmemes="dankmemes$$"
+
+    if [ $# -ne 2 ] # if the arg count not equal to 2
+    then
+        printf "%s\n" "Incorrect arguments!"
+    elif [ ! -r $1 ] || [ ! -r $2 ] # if either file is not readable
+    then
+        printf "%s\n" "Incorrect arguments!"
+    else
+        #obtaining column and row information from m1 and m2
+        rows1=$(cat $1 | wc -l)  # cat to get rows1
+        rows2=$(cat $2 | wc -l)  # cat to get rows2
+        cols1=$(head -n 1 $1 | wc -w) # using word count to get cols1
+        cols2=$(head -n 1 $2 | wc -w) # using word count to get cols2
+
+        # conditional checks to see if the matrix dimensions are compatible
+        # such that: NxP * PxN
+        if [ $cols1 -ne $rows2 ]
+        then
+            echo "Broken" 1>&2
+            exit 1
+        
+        else # run the multipling code
+            transpose $1 > $mdank #transposing the first inputted matrix
+
+            #obtain column information from the transposed first matrix
+            T_cols=$(head -n 1 $mdank | wc -w)
+
+            # outter for loop used to iterate through the transposed matrix
+            # columns
+            for((i=1;i<=$T_cols;i++))
+            do
+                cut -f$i $mdank > $dankfile # cutting the transposed matrix into temp
+
+                # 2nd for loop is used to iterate through the cols of the 2 matrix
+                for((j=1;j<=$cols2;j++))
+                do
+                    sum_oproducts=0
+                    cut -f$j $2 > $dankmemes # cutting cols from 2nd matrix
+
+                    # while loop is used to read temp file simulatneously
+                    #whilst multipling and adding them together
+                    while read theline1 <&3; read theline2 <&4;
+                    do
+                        product_ans=$(( $theline1*$theline2 )) # multply rows and cols
+
+                        # adding the products together
+                        sum_oproducts=$(( $product_ans+$sum_oproducts )) 
+                    done 3<$dankfile 4<$dankmemes
+
+                    # condionals used to print out the matrix from var sum_products
+                    if [ $j -eq $cols2 ]
+                    then
+                        printf "%s\n" $sum_oproducts
+                    else
+                        printf "%s\t" $sum_oproducts
+                    fi
+
+                done
+            done
+        fi
+    fi
+}
+$1 "${@:2}"
