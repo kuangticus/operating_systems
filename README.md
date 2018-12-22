@@ -1,2 +1,2 @@
 # cAdventure
-Text adventure game implemented using C-89
+Text adventure game implemented using C-89 (OS-1)
